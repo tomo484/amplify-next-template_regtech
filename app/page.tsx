@@ -1,52 +1,63 @@
 "use client";
 
+import type { Schema } from "@/amplify/data/resource";
+import { useAuthenticator } from "@aws-amplify/ui-react";
 import { useState, useEffect } from "react";
 import { generateClient } from "aws-amplify/data";
-import type { Schema } from "@/amplify/data/resource";
-import "./../app/app.css";
-import { Amplify } from "aws-amplify";
-import outputs from "@/amplify_outputs.json";
-import "@aws-amplify/ui-react/styles.css";
-
-Amplify.configure(outputs);
 
 const client = generateClient<Schema>();
 
-export default function App() {
+export default function HomePage() {
+  const { signOut, user } = useAuthenticator((context) => [context.user]);
   const [todos, setTodos] = useState<Array<Schema["Todo"]["type"]>>([]);
+
+  useEffect(() => {
+    if (user) {
+      try {
+        listTodos();
+      } catch (error) {
+        console.error("Error listing todos:", error);
+      }
+    }
+  }, [user]);
 
   function listTodos() {
     client.models.Todo.observeQuery().subscribe({
       next: (data) => setTodos([...data.items]),
-    });
-  }
-
-  useEffect(() => {
-    listTodos();
-  }, []);
-
-  function createTodo() {
-    client.models.Todo.create({
-      content: window.prompt("Todo content"),
+      error: (error) => console.error("Query error:", error)
     });
   }
 
   return (
     <main>
       <h1>My todos</h1>
-      <button onClick={createTodo}>+ new</button>
+      {user && <p>Welcome, {user.username}!</p>}
+      <button onClick={() => {
+        try {
+          client.models.Todo.create({
+            content: window.prompt("Todo content"),
+          });
+        } catch (error) {
+          console.error("Error creating todo:", error);
+        }
+      }}>+ new</button>
       <ul>
         {todos.map((todo) => (
-          <li key={todo.id}>{todo.content}</li>
+          <li 
+            onClick={() => {
+              try {
+                client.models.Todo.delete({ id: todo.id });
+              } catch (error) {
+                console.error("Error deleting todo:", error);
+              }
+            }}
+            key={todo.id}
+          >
+            {todo.content}
+          </li>
         ))}
       </ul>
-      <div>
-        🥳 App successfully hosted. Try creating a new todo.
-        <br />
-        <a href="https://docs.amplify.aws/nextjs/start/quickstart/nextjs-app-router-client-components/">
-          Review next steps of this tutorial.
-        </a>
-      </div>
+      <button onClick={signOut}>Sign out</button>
     </main>
   );
 }
